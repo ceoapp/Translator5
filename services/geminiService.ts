@@ -13,7 +13,7 @@ export const translateEngToThai = async (text: string): Promise<string> => {
   try {
     // Initialize GoogleGenAI inside the function to avoid crash on module load if API_KEY is missing
     // and to ensure we use the most up-to-date key if it was selected dynamically.
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    const ai = new GoogleGenAI({ apiKey: import.meta.env.VITE_API_KEY });
     
     const response = await ai.models.generateContent({
       model: 'gemini-2.5-flash',

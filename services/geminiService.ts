@@ -1,7 +1,5 @@
 import { GoogleGenAI } from "@google/genai";
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-
 /**
  * Translates English text to Thai using Gemini 2.5 Flash.
  * @param text The English text to translate.
@@ -13,6 +11,10 @@ export const translateEngToThai = async (text: string): Promise<string> => {
   }
 
   try {
+    // Initialize GoogleGenAI inside the function to avoid crash on module load if API_KEY is missing
+    // and to ensure we use the most up-to-date key if it was selected dynamically.
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    
     const response = await ai.models.generateContent({
       model: 'gemini-2.5-flash',
       contents: text,
@@ -25,6 +27,12 @@ export const translateEngToThai = async (text: string): Promise<string> => {
     return response.text?.trim() || "";
   } catch (error) {
     console.error("Gemini API Error:", error);
+    
+    // Provide a more helpful error message if the API key is missing
+    if (error instanceof Error && (error.message.includes("API Key") || error.message.includes("API_KEY"))) {
+      throw new Error("API Key is missing or invalid. Please ensure you have selected a Google Cloud Project.");
+    }
+    
     throw new Error("Failed to translate text. Please check your connection and try again.");
   }
 };

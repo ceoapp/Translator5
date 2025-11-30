@@ -1,8 +1,8 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { Header } from './components/Header';
 import { TranslationArea } from './components/TranslationArea';
 import { translateEngToThai } from './services/geminiService';
-import { ArrowRight, ArrowDown, Sparkles, AlertCircle } from 'lucide-react';
+import { ArrowRight, ArrowDown, Sparkles, AlertCircle, Key } from 'lucide-react';
 import { TranslationStatus } from './types';
 
 export default function App() {
@@ -10,6 +10,42 @@ export default function App() {
   const [translatedText, setTranslatedText] = useState('');
   const [status, setStatus] = useState<TranslationStatus>(TranslationStatus.IDLE);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [needsApiKey, setNeedsApiKey] = useState(false);
+
+  // Check for API Key availability in AI Studio environment
+  useEffect(() => {
+    const checkApiKey = async () => {
+      const aistudio = (window as any).aistudio;
+      if (aistudio) {
+        try {
+          const hasKey = await aistudio.hasSelectedApiKey();
+          if (!hasKey) {
+            setNeedsApiKey(true);
+          }
+        } catch (e) {
+          console.error("Error checking API key status:", e);
+        }
+      }
+    };
+    checkApiKey();
+  }, []);
+
+  const handleSelectKey = async () => {
+    const aistudio = (window as any).aistudio;
+    if (aistudio) {
+      try {
+        await aistudio.openSelectKey();
+        setNeedsApiKey(false);
+        // Reset error state if it was an API key error
+        if (errorMsg?.includes("API Key")) {
+          setErrorMsg(null);
+          setStatus(TranslationStatus.IDLE);
+        }
+      } catch (e) {
+        console.error("Error opening key selection:", e);
+      }
+    }
+  };
 
   const handleTranslate = useCallback(async () => {
     if (!inputText.trim()) return;
@@ -23,14 +59,22 @@ export default function App() {
       setStatus(TranslationStatus.SUCCESS);
     } catch (error) {
       console.error(error);
-      setErrorMsg(error instanceof Error ? error.message : "An unexpected error occurred.");
+      const message = error instanceof Error ? error.message : "An unexpected error occurred.";
+      setErrorMsg(message);
       setStatus(TranslationStatus.ERROR);
+      
+      // Re-check API key requirement if the error suggests it's missing
+      if (message.includes("API Key") && (window as any).aistudio) {
+        setNeedsApiKey(true);
+      }
     }
   }, [inputText]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
-      handleTranslate();
+      if (!needsApiKey) {
+        handleTranslate();
+      }
     }
   };
 
@@ -61,6 +105,22 @@ export default function App() {
             >
               Dismiss
             </button>
+          </div>
+        )}
+
+        {/* API Key Warning Banner (if key is missing) */}
+        {needsApiKey && (
+          <div className="p-4 bg-amber-50 border border-amber-100 rounded-xl flex items-center justify-between gap-3 text-amber-800 animate-in fade-in">
+             <div className="flex items-center gap-3">
+               <Key className="w-5 h-5 shrink-0" />
+               <div className="text-sm font-medium">API Key required to proceed.</div>
+             </div>
+             <button
+               onClick={handleSelectKey}
+               className="px-4 py-1.5 bg-amber-100 hover:bg-amber-200 text-amber-900 text-xs font-bold uppercase tracking-wider rounded-lg transition-colors"
+             >
+               Select Key
+             </button>
           </div>
         )}
 
@@ -104,29 +164,39 @@ export default function App() {
 
         {/* Action Button Bar */}
         <div className="flex justify-end pt-2 sticky bottom-6 z-20 md:static">
-          <button
-            onClick={handleTranslate}
-            disabled={!inputText.trim() || status === TranslationStatus.LOADING}
-            className={`
-              flex items-center gap-2 px-8 py-3.5 rounded-full font-semibold text-white shadow-lg shadow-primary-500/30 transition-all transform active:scale-95
-              ${(!inputText.trim() || status === TranslationStatus.LOADING) 
-                ? 'bg-slate-300 cursor-not-allowed shadow-none' 
-                : 'bg-primary-600 hover:bg-primary-700 hover:-translate-y-0.5'
-              }
-            `}
-          >
-            {status === TranslationStatus.LOADING ? (
-              <>
-                <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                <span>Translating...</span>
-              </>
-            ) : (
-              <>
-                <Sparkles className="w-5 h-5" />
-                <span>Translate</span>
-              </>
-            )}
-          </button>
+          {needsApiKey ? (
+            <button
+              onClick={handleSelectKey}
+              className="flex items-center gap-2 px-8 py-3.5 rounded-full font-semibold text-white shadow-lg shadow-amber-500/30 bg-amber-600 hover:bg-amber-700 transition-all transform active:scale-95"
+            >
+              <Key className="w-5 h-5" />
+              <span>Select API Key</span>
+            </button>
+          ) : (
+            <button
+              onClick={handleTranslate}
+              disabled={!inputText.trim() || status === TranslationStatus.LOADING}
+              className={`
+                flex items-center gap-2 px-8 py-3.5 rounded-full font-semibold text-white shadow-lg shadow-primary-500/30 transition-all transform active:scale-95
+                ${(!inputText.trim() || status === TranslationStatus.LOADING) 
+                  ? 'bg-slate-300 cursor-not-allowed shadow-none' 
+                  : 'bg-primary-600 hover:bg-primary-700 hover:-translate-y-0.5'
+                }
+              `}
+            >
+              {status === TranslationStatus.LOADING ? (
+                <>
+                  <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  <span>Translating...</span>
+                </>
+              ) : (
+                <>
+                  <Sparkles className="w-5 h-5" />
+                  <span>Translate</span>
+                </>
+              )}
+            </button>
+          )}
         </div>
 
         {/* Keyboard shortcut hint */}
